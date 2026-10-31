@@ -32,7 +32,7 @@
     {\setlength{\fboxsep}{0pt}\fbox{\parbox[c][#3#2][c]{\dimexpr#2-0.8pt\relax}{\centering\scriptsize\textcolor{red}{missing \texttt{\detokenize{#1}}}}}}%
 }
 
-\title{Generating Chest X-Rays with a Fully Connected Variational Autoencoder}
+\title{Generating Chest X-Rays with a Variational Autoencoder}
 
 \author{%
   Cameron Rosenthal \\
@@ -44,28 +44,26 @@
 \maketitle
 
 \begin{abstract}
-I implement a variational autoencoder (VAE) in PyTorch and train it on the 1{,}341 normal chest radiographs in the training split of the Kaggle chest X-ray pneumonia dataset. The encoder and decoder are fully connected networks, images are $128\times128$ grayscale, and the latent code has 256 dimensions. I report the hyperparameters, training loss curves, the Fréchet Inception Distance (FID) and Inception Score (IS) from pytorch-ignite, and generated images. The samples show the overall anatomy of a pediatric chest X-ray and vary from sample to sample, but they are blurrier than real images and lose fine texture. The code is at \url{https://github.com/Supernova1114/ece-285-hw1-vae}.
+This report presents a variational autoencoder (VAE), implemented in PyTorch and trained on the 1{,}341 normal chest radiographs in the training split of the Kaggle chest X-ray pneumonia dataset. The encoder and decoder are fully connected networks, images are $128\times128$ grayscale, and the latent code has 256 dimensions. The report covers the hyperparameters, training loss curves, the Fréchet Inception Distance (FID) and Inception Score (IS) from pytorch-ignite, and generated images. The samples show the overall anatomy of a chest X-ray and vary from sample to sample, but they are blurrier than real images and lose fine texture. The code is at \url{https://github.com/Supernova1114/ece-285-hw1-vae}.
 \end{abstract}
 
 \section{Introduction}
 
-A VAE pairs a decoder $p_\theta(x\mid z)$ with an encoder $q_\phi(z\mid x)$ and trains both by maximizing the evidence lower bound (ELBO) under the prior $p(z)=\mathcal{N}(0,I)$. Decoding $z\sim\mathcal{N}(0,I)$ then generates new images. I generate normal chest X-rays this way and score them with FID and IS.
+A VAE pairs a decoder $p_\theta(x\mid z)$ with an encoder $q_\phi(z\mid x)$ and trains both by maximizing the evidence lower bound (ELBO) under the prior $p(z)=\mathcal{N}(0,I)$. Decoding $z\sim\mathcal{N}(0,I)$ then generates new images. Here this is used to generate normal chest X-rays, which are scored with FID and IS.
 
 \section{Method}
 
-\paragraph{Data.} I use the chest X-ray pneumonia dataset from Kaggle. The model trains only on the 1{,}341 images in \texttt{train/NORMAL}; the 234 images in \texttt{test/NORMAL} serve only as an FID reference. Each image is converted to grayscale, resized so its shorter side is 128 pixels, center-cropped to $128\times128$ and scaled to $[0,1]$. No augmentation is used.
+\paragraph{Data.} The data is the chest X-ray pneumonia dataset from Kaggle. The model trains only on the 1{,}341 images in \texttt{train/NORMAL}; the 234 images in \texttt{test/NORMAL} serve only as an FID reference. Each image is converted to grayscale, resized so its shorter side is 128 pixels, center-cropped to $128\times128$ and scaled to $[0,1]$. No augmentation is used.
 
 \paragraph{Architecture.} The encoder flattens the image into $128^2=16{,}384$ pixels and applies two fully connected layers of width 1{,}024 with ReLU. Two linear heads output the mean $\mu(x)$ and log variance $\log\sigma^2(x)$ of $q_\phi(z\mid x)$, both in $\mathbb{R}^{256}$. The reparameterization trick, $z=\mu+\sigma\odot\epsilon$ with $\epsilon\sim\mathcal{N}(0,I)$, lets gradients flow through sampling. The decoder mirrors the encoder ($256\to1{,}024\to1{,}024\to16{,}384$) and ends in a sigmoid so pixels lie in $[0,1]$.
 
-\paragraph{Objective.} For each image I minimize, with $\hat{x}$ the decoder output and the squared error summed over pixels,
+\paragraph{Loss.} The loss for each image has two terms:
 \begin{equation}
-\mathcal{L}(x)=\lVert x-\hat{x}\rVert_2^2+\beta\,\mathrm{KL}\big(q_\phi(z\mid x)\,\Vert\,\mathcal{N}(0,I)\big),
-\qquad
-\mathrm{KL}=-\tfrac12\textstyle\sum_{j=1}^{256}\big(1+\log\sigma_j^2-\mu_j^2-\sigma_j^2\big).
+\mathcal{L}(x)=\lVert x-\hat{x}\rVert^2+\beta\,\mathrm{KL}\big(q_\phi(z\mid x)\,\Vert\,\mathcal{N}(0,I)\big).
 \end{equation}
-With $\beta=1$, the squared error is the negative log-likelihood of a Gaussian decoder with variance $\nicefrac12$ up to a constant, so $\mathcal{L}$ is the negative ELBO up to a constant. Summing rather than averaging over pixels keeps the two terms on comparable scales; averaging would let the KL term dominate, which would likely make the decoder ignore $z$.
+The first is the squared error between the image $x$ and the decoder's output $\hat{x}$, summed over all pixels. The second is the KL divergence, which measures how far the encoder's distribution for $z$ is from a standard Gaussian. Keeping it small is what lets random $z\sim\mathcal{N}(0,I)$ decode into realistic images. $\beta=1$ is the weight on the KL term.
 
-\paragraph{Training and evaluation.} \Cref{tab:hyper} lists the settings. I train with Adam and keep the final weights. FID and IS use pytorch-ignite's default \texttt{FID} and \texttt{InceptionScore} metrics, which run an ImageNet-pretrained InceptionV3 on images upsampled to $299\times299$ with the gray channel copied into three color channels. I compare 1{,}341 generated images with the 1{,}341 training images. Ignite's default FID uses InceptionV3's 1{,}000 class probabilities, not its 2{,}048 pooled features, so its values are far below published FIDs. IS rewards confident, varied ImageNet predictions, and X-rays fit no ImageNet class, so IS says little about anatomical realism. For scale, I also score real images and an untrained model.
+\paragraph{Training and evaluation.} \Cref{tab:hyper} lists the settings. Training uses Adam, and the final weights are kept. FID and IS use pytorch-ignite's default \texttt{FID} and \texttt{InceptionScore} metrics, which run an ImageNet-pretrained InceptionV3 on images upsampled to $299\times299$ with the gray channel copied into three color channels. 1{,}341 generated images are compared with the 1{,}341 training images. For scale, real images and an untrained model are scored too.
 
 \begin{table}[t]
 \centering
@@ -111,9 +109,9 @@ Untrained VAE & 0.203 & 1.02 \\
 
 \section{Results}
 
-\paragraph{Training curves.} \Cref{fig:results}(a, b) shows the loss per image and its KL term. The loss falls quickly from about 405 in the first epoch to about 150 by epoch 100, then slowly to 112 at epoch 300, still decreasing slightly. The KL term drops to 0.7 in the second epoch, when $z$ briefly carries almost no information, then rises to about 16 by epoch 50 and settles near 18. It does not collapse to zero, so the decoder uses the latent code. After training, the squared error on the training images is 92 per image, a root-mean-square pixel error of 0.075 (19 of 255 gray levels).
+\paragraph{Training curves.} \Cref{fig:results}(a, b) shows the loss and KL divergence per image. The loss drops quickly at first and levels off near 112 by epoch 300. The KL divergence settles near 18 rather than falling to zero, so the decoder makes use of $z$.
 
-\paragraph{FID and IS.} In \cref{tab:scores}, lower FID and higher IS are better. Real test images score an FID of 0.024 against the training images, roughly the best a model can reach, while an untrained model that outputs noise scores 0.203. The VAE's 0.180 closes only 13\% of that gap, consistent with its blur. Its IS of 1.74 is near the real images' 2.03, but as X-rays fit no ImageNet class, this shows little.
+\paragraph{FID and IS.} In \cref{tab:scores}, lower FID and higher IS are better. Real test images score an FID of 0.024 against the training images, roughly the best a model can reach, while an untrained model that outputs noise scores 0.203. The VAE's 0.180 closes only 13\% of that gap, consistent with its blur. Its IS of 1.74 is near the real images' 2.03.
 
 \paragraph{Generated images.} The samples in \cref{fig:results}(c) are recognizable frontal chest X-rays, with two dark lung fields, the spine, curved ribs and the diaphragm, and they differ in brightness, contrast and body size. Next to the real images they are clearly blurrier: rib edges are soft and the fine lung texture is missing.
 
