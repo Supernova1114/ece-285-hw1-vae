@@ -57,8 +57,8 @@ class VAE(nn.Module):
             samples = self.decoder(z)
         return samples
 
-def vae_loss(x: torch.Tensor, x_hat: torch.Tensor, mu: torch.Tensor, log_var: torch.Tensor, beta: float):
-    """Total loss is the reconstruction loss plus beta times the KL divergence. Returns (loss, recon, kl)."""
+def vae_loss(x: torch.Tensor, x_hat: torch.Tensor, mu: torch.Tensor, log_var: torch.Tensor, beta: float) -> tuple[torch.Tensor, torch.Tensor]:
+    """Total loss is the reconstruction loss plus beta times the KL divergence. Returns (total loss, KL divergence)."""
     # Reconstruction loss: how different the output image is from the real image
     reconstruction_loss = F.mse_loss(x_hat, x, reduction="sum") / len(x) # Squared error summed over each image's pixels
 
@@ -67,4 +67,4 @@ def vae_loss(x: torch.Tensor, x_hat: torch.Tensor, mu: torch.Tensor, log_var: to
     kl = -0.5 * kl_terms.sum() / len(x)
 
     loss = reconstruction_loss + beta * kl
-    return loss, reconstruction_loss, kl
+    return loss, kl
