@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from ignite.metrics import FID, InceptionScore
 from torchvision.transforms.functional import normalize
+from torchvision.utils import save_image
 
 from data import load_folder
 from model import VAE
@@ -41,6 +42,12 @@ def evaluate():
 
     print(f"FID: {fid.compute():.4f}")
     print(f"IS: {inception_score.compute():.4f}")
+
+    # Comparison grid: top row is 4 real images, bottom row is 4 generated images
+    real_row = real_images[:4]
+    generated_row = model.sample(4, device)
+    comparison = torch.cat([real_row, generated_row])
+    save_image(comparison, OUT_DIR / "comparison_grid.png", nrow=4)
 
 
 if __name__ == "__main__":
