@@ -44,7 +44,7 @@
 \maketitle
 
 \begin{abstract}
-I implement a variational autoencoder (VAE) in PyTorch and train it on the 1{,}341 normal chest radiographs in the training split of the Kaggle chest X-ray pneumonia dataset. The encoder and decoder are fully connected networks, images are $128\times128$ grayscale, and the latent code has 256 dimensions. I report the hyperparameters, training loss curves, the Fréchet Inception Distance (FID) and Inception Score (IS) from pytorch-ignite, and generated images. The samples show the overall anatomy of a pediatric chest X-ray and vary from sample to sample, but they are blurrier than real images and lose fine texture.
+I implement a variational autoencoder (VAE) in PyTorch and train it on the 1{,}341 normal chest radiographs in the training split of the Kaggle chest X-ray pneumonia dataset. The encoder and decoder are fully connected networks, images are $128\times128$ grayscale, and the latent code has 256 dimensions. I report the hyperparameters, training loss curves, the Fréchet Inception Distance (FID) and Inception Score (IS) from pytorch-ignite, and generated images. The samples show the overall anatomy of a pediatric chest X-ray and vary from sample to sample, but they are blurrier than real images and lose fine texture. The code is at \url{https://github.com/Supernova1114/ece-285-hw1-vae}.
 \end{abstract}
 
 \section{Introduction}
@@ -63,7 +63,7 @@ A VAE pairs a decoder $p_\theta(x\mid z)$ with an encoder $q_\phi(z\mid x)$ and 
 \qquad
 \mathrm{KL}=-\tfrac12\textstyle\sum_{j=1}^{256}\big(1+\log\sigma_j^2-\mu_j^2-\sigma_j^2\big).
 \end{equation}
-With $\beta=1$, the squared error is the negative log-likelihood of a Gaussian decoder with variance $\nicefrac12$ up to a constant, so $\mathcal{L}$ is the negative ELBO up to a constant. Summing rather than averaging over pixels keeps the two terms on comparable scales; averaging would let the KL term dominate and the decoder would ignore $z$.
+With $\beta=1$, the squared error is the negative log-likelihood of a Gaussian decoder with variance $\nicefrac12$ up to a constant, so $\mathcal{L}$ is the negative ELBO up to a constant. Summing rather than averaging over pixels keeps the two terms on comparable scales; averaging would let the KL term dominate, which would likely make the decoder ignore $z$.
 
 \paragraph{Training and evaluation.} \Cref{tab:hyper} lists the settings. I train with Adam and keep the final weights. FID and IS use pytorch-ignite's default \texttt{FID} and \texttt{InceptionScore} metrics, which run an ImageNet-pretrained InceptionV3 on images upsampled to $299\times299$ with the gray channel copied into three color channels. I compare 1{,}341 generated images with the 1{,}341 training images. Ignite's default FID uses InceptionV3's 1{,}000 class probabilities, not its 2{,}048 pooled features, so its values are far below published FIDs. IS rewards confident, varied ImageNet predictions, and X-rays fit no ImageNet class, so IS says little about anatomical realism. For scale, I also score real images and an untrained model.
 
@@ -111,7 +111,7 @@ Untrained VAE & 0.203 & 1.02 \\
 
 \section{Results}
 
-\paragraph{Training curves.} \Cref{fig:results}(a, b) shows the loss per image and its KL term. The loss falls quickly from about 405 in the first epoch to about 150 by epoch 100, then slowly to 112 at epoch 300, still decreasing slightly. The KL term drops to 0.7 in the second epoch, when the decoder briefly ignores $z$, then rises to about 16 by epoch 50 and settles near 18. It does not collapse to zero, so the decoder uses the latent code. The final squared error of about 94 per image is a root-mean-square pixel error of 0.076 (19 of 255 gray levels).
+\paragraph{Training curves.} \Cref{fig:results}(a, b) shows the loss per image and its KL term. The loss falls quickly from about 405 in the first epoch to about 150 by epoch 100, then slowly to 112 at epoch 300, still decreasing slightly. The KL term drops to 0.7 in the second epoch, when $z$ briefly carries almost no information, then rises to about 16 by epoch 50 and settles near 18. It does not collapse to zero, so the decoder uses the latent code. After training, the squared error on the training images is 92 per image, a root-mean-square pixel error of 0.075 (19 of 255 gray levels).
 
 \paragraph{FID and IS.} In \cref{tab:scores}, lower FID and higher IS are better. Real test images score an FID of 0.024 against the training images, roughly the best a model can reach, while an untrained model that outputs noise scores 0.203. The VAE's 0.180 closes only 13\% of that gap, consistent with its blur. Its IS of 1.74 is near the real images' 2.03, but as X-rays fit no ImageNet class, this shows little.
 
@@ -126,7 +126,5 @@ Untrained VAE & 0.203 & 1.02 \\
 \label{fig:results}
 \end{figure}
 
-
-\paragraph{Limitations.} A fully connected decoder has no notion that neighboring pixels belong together, so it must learn each edge separately at every position, and a squared-error loss averages over plausible images when $z$ is uncertain; both blur detail. I track only the training loss, so overfitting is not measured. Next steps are convolutional networks, a learned decoder variance as in the $\sigma$-VAE, and a validation loss.
 
 \end{document}
